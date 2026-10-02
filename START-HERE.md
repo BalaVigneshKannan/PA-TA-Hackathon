@@ -27,3 +27,5 @@ The workflow includes separate PA/TA forms, automatic eligibility checks, multip
 College SSO/API integration is not configured. The optional signed-assertion interface and academic synchronization contract are documented in [docs/intranet-integration.md](docs/intranet-integration.md). Existing demo profiles and timetables remain synthetic until connected. Duty timetable overlap detection is not implemented.
 
 npm ci restores dependencies from package-lock.json; installation requires internet access. The live university connection remains unconfigured until the institution supplies its authentication and academic-data settings.
+
+For complete instructions, see the [setup guide](docs/setup.md), [technical overview](docs/technical-overview.md), [API reference](docs/api-reference.md), and [deployment guide](docs/deployment.md). The [README](README.md) indexes all submission documentation.

@@ -1,0 +1,22 @@
+[Unit]
+Description=PA and TA application portal
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=portal
+Group=portal
+WorkingDirectory=/srv/pa-ta-portal/backend
+ExecStart=/usr/bin/node /srv/pa-ta-portal/backend/src/server.js
+Environment=NODE_ENV=production
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=30
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+
+[Install]
+WantedBy=multi-user.target
