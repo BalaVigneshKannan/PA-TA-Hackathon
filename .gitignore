@@ -1,0 +1,9 @@
+node_modules/
+frontend/dist/
+backend/.env
+backend/.data/
+backend/.data-backup*/
+*.log
+LOCAL-ACCESS.md
+FACULTY-DEMO-ACCESS.md
+DEMO-ACCESS.md

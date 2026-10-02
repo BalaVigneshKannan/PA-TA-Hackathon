@@ -1,0 +1,44 @@
+import {grantTestFaculty} from './faculty-fixture.js';
+import {before,after,test} from 'node:test';
+import assert from 'node:assert/strict';
+import {randomUUID} from 'node:crypto';
+import bcrypt from 'bcrypt';
+import request from 'supertest';
+import {openDatabase} from '../src/db.js';
+import {migrate} from '../src/migrate.js';
+import {createApp} from '../src/app.js';
+let db,app,admin,faculty,student;
+const origin='http://127.0.0.1:5173';
+const cycle={academic_year:'2026-2027',term:'FALL',application_start:'2026-09-01',application_end:'2026-10-31'};
+const send=(method,path,body,cookie=admin)=>request(app)[method](`/api/admin${path}`).set('Origin',origin).set('Cookie',cookie).send(body);
+before(async()=>{db=await openDatabase({memory:true});await migrate(db);app=createApp(db,{secret:'semester-test-secret-over-thirty-two-characters',origin});const revoke=await grantTestFaculty(db,'faculty@dubai.bits-pilani.ac.in');
+ const hash=await bcrypt.hash('Semester-test-password',12);
+ const cookies=[];for(const [role,email] of [['ADMIN','admin@dubai.bits-pilani.ac.in'],['FACULTY','faculty@dubai.bits-pilani.ac.in'],['STUDENT','f20240123@dubai.bits-pilani.ac.in']]){await db.query('INSERT INTO users(id,email,name,password_hash,role) VALUES($1,$2,$3,$4,$5)',[randomUUID(),email,role,hash,role]);const result=await request(app).post('/api/auth/login').set('Origin',origin).send({email,role,password:'Semester-test-password'}).expect(200);cookies.push(result.headers['set-cookie']);}[admin,faculty,student]=cookies;await revoke();
+});
+after(async()=>{await db.close();});
+test('semester APIs require an admin for reads and mutations',async()=>{await request(app).get('/api/admin/semesters').expect(401);for(const cookie of [faculty,student]){await send('get','/semesters',undefined,cookie).expect(403);await send('post','/semesters',cycle,cookie).expect(403);await send('patch','/semesters/x',cycle,cookie).expect(403);await send('post','/semesters/x/archive',{},cookie).expect(403);}});
+test('reject invalid years, semesters and real calendar dates',async()=>{for(const bad of [{academic_year:'2026-2028'},{term:'SUMMER'},{application_start:'2026-02-30'},{application_end:'2026-08-01'},{application_start:'bad'}])await send('post','/semesters',{...cycle,...bad}).expect(400);});
+test('create draft with Dubai boundaries, prevent duplicate, edit and activate',async()=>{
+ const {body}=await send('post','/semesters',cycle).expect(201);assert.equal(body.semester.id,'FALL_2026_27');assert.equal(body.semester.status,'DRAFT');assert.equal(new Date(body.semester.application_start).toISOString(),'2026-08-31T20:00:00.000Z');
+ await send('post','/semesters',cycle).expect(409);
+ const updated=await send('patch','/semesters/FALL_2026_27',{...cycle,application_end:'2026-11-01'}).expect(200);assert.equal(new Date(updated.body.semester.application_end).toISOString(),'2026-11-01T19:59:59.999Z');
+ await send('patch','/semesters/FALL_2026_27',{...cycle,term:'SPRING'}).expect(400);
+ await send('post','/semesters/FALL_2026_27/activate',{}).expect(200);
+ const dash=await send('get','/dashboard').expect(200);assert.equal(dash.body.activeSemester.id,'FALL_2026_27');
+});
+test('only one active semester; archive retains history and allows next cycle',async()=>{
+ await send('post','/semesters',{...cycle,term:'SPRING',application_start:'2027-01-01',application_end:'2027-02-01'}).expect(201);
+ await send('post','/semesters/SPRING_2026_27/activate',{}).expect(409);
+ await send('post','/semesters/FALL_2026_27/archive',{}).expect(200);
+ await send('patch','/semesters/FALL_2026_27',cycle).expect(409);await send('post','/semesters/FALL_2026_27/activate',{}).expect(409);
+ await send('post','/semesters/SPRING_2026_27/activate',{}).expect(200);
+ const list=await send('get','/semesters').expect(200);assert.equal(list.body.semesters.length,2);assert.equal(list.body.semesters.find(s=>s.id==='FALL_2026_27').status,'ARCHIVED');
+ const logs=await db.query("SELECT action,details FROM audit_logs WHERE action LIKE 'SEMESTER_%'");assert.ok(logs.rows.some(r=>r.action==='SEMESTER_UPDATED'&&r.details.before&&r.details.after));assert.ok(logs.rows.some(r=>r.action==='SEMESTER_ARCHIVED'));
+});
+test('concurrent activations cannot produce two active semesters; missing records return 404',async()=>{
+ await send('post','/semesters/SPRING_2026_27/archive',{}).expect(200);
+ for(const term of ['FALL','SPRING'])await send('post','/semesters',{...cycle,academic_year:'2027-2028',term}).expect(201);
+ const results=await Promise.all(['FALL','SPRING'].map(term=>send('post',`/semesters/${term}_2027_28/activate`,{})));
+ assert.deepEqual(results.map(r=>r.status).sort(),[200,409]);assert.equal((await db.query("SELECT * FROM semesters WHERE status='ACTIVE'")).rows.length,1);
+ await send('post','/semesters/missing/archive',{}).expect(404);await send('patch','/semesters/missing',cycle).expect(404);
+});

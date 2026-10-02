@@ -1,0 +1,19 @@
+{
+  "name": "pa-ta-portal",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "frontend",
+    "backend"
+  ],
+  "scripts": {
+    "dev": "node dev.js",
+    "build": "npm run build -w frontend",
+    "start": "npm run start -w backend",
+    "db:migrate": "npm run migrate -w backend",
+    "db:seed": "npm run seed -w backend",
+    "test": "npm run test -w backend",
+    "preview": "node preview.js"
+  }
+}
