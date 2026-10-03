@@ -82,7 +82,7 @@ Run these from the repository root. Use `npm.cmd` in PowerShell if script execut
 | `npm run seed:demo -w backend` | Create synthetic demonstration accounts and workbook. |
 | `npm start` | Start the backend using deployment environment settings. |
 
-The latest local verification passed **58 tests** and the frontend build. See the [verification report](docs/verification.md) for what was checked and its limits.
+The latest local verification passed **59 tests** and the frontend build. See the [verification report](docs/verification.md) for what was checked and its limits.
 
 ## Documentation
 

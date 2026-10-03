@@ -1,6 +1,8 @@
 # Verification
 
-Latest review, 2 October 2026: all 58 backend integration tests pass. The production frontend build passed, and the live preview's API, HTML and JavaScript bundle return HTTP 200. The packaged database's missing empty PostgreSQL directories were restored without reseeding; migration 8 completed successfully. A regression test verifies that restoring these directories preserves persisted records. See [problem-statement-review.md](problem-statement-review.md) for the current feature comparison, cleanup and remaining university connection requirements.
+3 October 2026 amount-save update: all 59 backend tests and the frontend build pass. Browser verification saved both PA/TA amounts, confirmed they survived a reload, checked visible validation for an invalid three-decimal amount, and restored the original 1,200/1,500 AED values. The save response now returns persisted settings, and the page confirms the exact saved amounts.
+
+Workflow review, 2 October 2026: all 58 backend integration tests pass. The production frontend build passed, and the live preview's API, HTML and JavaScript bundle return HTTP 200. The packaged database's missing empty PostgreSQL directories were restored without reseeding; migration 8 completed successfully. A regression test verifies that restoring these directories preserves persisted records. See [problem-statement-review.md](problem-statement-review.md) for the current feature comparison, cleanup and remaining university connection requirements.
 
 ## Historical Phase 1 verification
 

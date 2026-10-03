@@ -13,7 +13,7 @@ export function allocationRoutes(app,db){
   for(const key of ['pa_amount','ta_amount'])if(!['string','number'].includes(typeof body[key])||!/^\d{1,8}(\.\d{1,2})?$/.test(String(body[key])))fail(400,'Enter non-negative AED amounts with at most two decimal places (maximum 99,999,999.99).');
   if(!Array.isArray(body.courses)||body.courses.length>1000)fail(400,'Provide the course allocations.');
   const ids=new Set();for(const c of body.courses){if(!c||typeof c.id!=='string'||ids.has(c.id)||!['pa_slots','ta_slots'].every(k=>Number.isInteger(c[k])&&c[k]>=0&&c[k]<=10000))fail(400,'Each course needs unique, whole-number PA and TA slots between 0 and 10,000.');ids.add(c.id);}
-  await db.transaction(async tx=>{
+  const saved=await db.transaction(async tx=>{
    const semester=(await tx.query('SELECT * FROM semesters WHERE id=$1 FOR UPDATE',[req.params.id])).rows[0];
    if(!semester)fail(404,'Semester not found.');if(!['DRAFT','ACTIVE'].includes(semester.status))fail(409,'Archived or finalized semesters cannot be edited.');
    const before=await courses(tx,semester.id);
@@ -25,6 +25,7 @@ export function allocationRoutes(app,db){
    }
    await tx.query('UPDATE semesters SET pa_amount=$1,ta_amount=$2,application_start=$3,application_end=$4 WHERE id=$5',[body.pa_amount,body.ta_amount,start,end,semester.id]);
    await tx.query('INSERT INTO audit_logs(id,user_id,action,details) VALUES($1,$2,$3,$4)',[randomUUID(),req.user.id,'ALLOCATIONS_UPDATED',JSON.stringify({before:{semester,courses:before},after:body})]);
-  });res.json({message:'PA/TA settings saved.'});
+   return {semester:(await tx.query('SELECT * FROM semesters WHERE id=$1',[semester.id])).rows[0],courses:await courses(tx,semester.id)};
+  });res.json({message:'PA/TA settings saved.',...saved});
  }));
 }

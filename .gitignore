@@ -7,3 +7,6 @@ backend/.data-backup*/
 LOCAL-ACCESS.md
 FACULTY-DEMO-ACCESS.md
 DEMO-ACCESS.md
+demo-video/tools/
+demo-video/.runtime/
+.local-verification/

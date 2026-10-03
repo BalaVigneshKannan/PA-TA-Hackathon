@@ -20,6 +20,19 @@ before(async()=>{db=await openDatabase({memory:true});await migrate(db);app=crea
 after(async()=>db.close());
 test('only Admin may read or update allocations',async()=>{await request(app).get(path).expect(401);for(const c of [faculty,student]){await request(app).get(path).set('Cookie',c).expect(403);await save(body(),c).expect(403);}});
 test('save amounts, dates and slots atomically and expose read-only role views',async()=>{await save().expect(200);const r=(await request(app).get(path).set('Cookie',admin).expect(200)).body;assert.equal(Number(r.semester.pa_amount),1200.5);assert.equal(r.courses[0].ta_slots,3);assert.equal(new Date(r.semester.application_end).toISOString(),'2026-10-31T19:59:59.999Z');for(const [url,c] of [['/api/faculty/courses',faculty],['/api/student/opportunities',student]]){const result=await request(app).get(url).set('Cookie',c).expect(200);assert.equal(Number(result.body.semester.ta_amount),1500);assert.equal(result.body.courses[0].pa_slots,2);}assert.equal((await db.query("SELECT * FROM audit_logs WHERE action='ALLOCATIONS_UPDATED'")).rows.length,1);});
+test('repeated amount edits return the persisted values and update both role workspaces',async()=>{
+ for(const [pa,ta] of [['1250.50','1550.75'],['0','25.10'],['1200.50','1500']]){
+  const saved=(await save({...body(),pa_amount:pa,ta_amount:ta}).expect(200)).body;
+  assert.equal(Number(saved.semester.pa_amount),Number(pa));assert.equal(Number(saved.semester.ta_amount),Number(ta));
+  assert.equal(saved.courses[0].pa_slots,2);assert.equal(saved.courses[0].ta_slots,3);
+  const stored=(await request(app).get(path).set('Cookie',admin).expect(200)).body;
+  assert.deepEqual(saved.semester,stored.semester);assert.deepEqual(saved.courses,stored.courses);
+  for(const [url,cookie] of [['/api/faculty/courses',faculty],['/api/student/opportunities',student]]){
+   const view=(await request(app).get(url).set('Cookie',cookie).expect(200)).body;
+   assert.equal(Number(view.semester.pa_amount),Number(pa));assert.equal(Number(view.semester.ta_amount),Number(ta));
+  }
+ }
+});
 test('reject fractional/negative slots, invalid money, invalid dates and mixed semester lists',async()=>{for(const patch of [{pa_amount:-1},{ta_amount:'1.234'},{pa_amount:100000000},{application_end:'2026-02-30'},{courses:[{id,pa_slots:1.5,ta_slots:2}]},{courses:[{id,pa_slots:-1,ta_slots:0}]}])await save({...body(),...patch}).expect(400);await save({...body(),courses:[]}).expect(409);await save({...body(),courses:[{id:randomUUID(),pa_slots:1,ta_slots:1}]}).expect(409);assert.equal(Number((await db.query('SELECT pa_amount FROM semesters')).rows[0].pa_amount),1200.5);});
 test('cannot reduce slots below active appointments; failed save preserves amounts',async()=>{await db.query("INSERT INTO students VALUES($1,'20240123','CS',2,9)",[studentId]);const aid=randomUUID();await db.query("INSERT INTO applications(id,student_id,assignment_id,semester_id,role) VALUES($1,$2,$3,'FALL_2026_27','PA')",[aid,studentId,id]);await db.query("INSERT INTO assistantship_appointments(id,application_id,student_id,semester_id,role) VALUES($1,$2,$3,'FALL_2026_27','PA')",[randomUUID(),aid,studentId]);await save({...body(),pa_amount:50,courses:[{id,pa_slots:0,ta_slots:0}]}).expect(409);assert.equal(Number((await db.query('SELECT pa_amount FROM semesters')).rows[0].pa_amount),1200.5);});
 test('archived allocations remain readable, immutable and absent from student opportunities',async()=>{await db.query("UPDATE semesters SET status='ARCHIVED'");await save().expect(409);await request(app).get(path).set('Cookie',admin).expect(200);const result=await request(app).get('/api/student/opportunities').set('Cookie',student).expect(200);assert.equal(result.body.semester,null);assert.deepEqual(result.body.courses,[]);});
